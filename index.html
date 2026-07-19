@@ -156,6 +156,11 @@
       .header h1{font-size:23px}
     }
   </style>
+
+<style>
+.upload-grid, .attachments-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+@media(max-width:720px){.upload-grid,.attachments-grid{grid-template-columns:1fr!important;}}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -251,16 +256,11 @@
         <small>PDF or image exported from the duct leakage results application.</small>
         <div id="appStatus" class="status">No file selected.</div>
       </div>
-
-      <div class="upload full">
-        <label>Construction Plans <span class="required">*</span></label>
-        <input id="plans" type="file" accept=".pdf" />
-        <small>PDF plans will be appended behind the report.</small>
-      </div>
+</div>
     </div>
 
     <div class="notice">
-      The final PDF order is: Report → DG Manometer Photo → Test Results App Export.
+      The generated PDF contains the Mean Green Duct Leakage Report only. The DG manometer photo and test results export remain separate files for emailing.
     </div>
   </section>
 
@@ -268,7 +268,7 @@
     <h2>Completion Checklist</h2>
     <div id="checklist" class="checklist"></div>
     <div class="actions">
-      <button class="primary" id="generateBtn">Generate Combined PDF Report</button>
+      <button class="primary" id="generateBtn">Generate Report PDF</button>
       <button class="secondary" id="saveBtn">Save Draft to This Device</button>
       <button class="secondary" id="loadBtn">Load Saved Draft</button>
       <button class="danger" id="clearBtn">Clear Form</button>
@@ -292,9 +292,8 @@ function calculate(){
 function updateChecklist(){
   const items = [
     ["Project information complete", $("builder").value && $("address").value && $("cfa").value && $("testDate").value],
-    ["DG manometer photo attached", $("dgPhoto").files.length > 0],
-    ["Test results app export attached", $("appResult").files.length > 0],
-    ["", $("plans").files.length > 0]
+    ["DG manometer photo selected", $("dgPhoto").files.length > 0],
+    ["Test results app export selected", $("appResult").files.length > 0]
   ];
   $("checklist").innerHTML = items.map(([name,ok]) =>
     `<div class="${ok ? 'check-ok' : 'check-missing'}">${ok ? '✓' : '✗'} ${name}</div>`
@@ -314,6 +313,7 @@ $("appResult").addEventListener("change", e => {
   updateChecklist();
 });
 $("plans").addEventListener("change", e => {
+  $("plansStatus").textContent = e.target.files[0] ? e.target.files[0].name : "No file selected.";
   updateChecklist();
 });
 $("cfa").addEventListener("input", calculate);
@@ -342,9 +342,10 @@ function clearForm(){
     else if(id === "result") $(id).value = "Pass";
     else $(id).value = "";
   });
-  ["dgPhoto","appResult","plans"].forEach(id => $(id).value = "");
+  ["dgPhoto","appResult"].forEach(id => $(id).value = "");
   $("dgPreview").style.display = "none";
   $("appStatus").textContent = "No file selected.";
+  $("plansStatus").textContent = "No file selected.";
   $("normalized").value = "";
   $("message").textContent = "Form cleared.";
   updateChecklist();
@@ -389,10 +390,7 @@ async function generate(){
     ["Builder", $("builder").value],
     ["Property Address", $("address").value],
     ["Conditioned Floor Area", $("cfa").value],
-    ["Test Date", $("testDate").value],
-    ["DG manometer photo", $("dgPhoto").files[0]],
-    ["Test results app export", $("appResult").files[0]],
-    ["Construction plans", $("plans").files[0]]
+    ["Test Date", $("testDate").value]
   ];
   const missing = required.filter(x => !x[1]).map(x => x[0]);
   if(missing.length){
@@ -405,7 +403,7 @@ async function generate(){
     return;
   }
 
-  $("message").textContent = "Building report...";
+  $("message").textContent = "Building report PDF...";
   try{
     const pdfDoc = await PDFLib.PDFDocument.create();
     window._pdfFonts = {
@@ -448,36 +446,32 @@ async function generate(){
       page.drawLine({start:{x:40,y:y-5},end:{x:572,y:y-5},thickness:.5,color:PDFLib.rgb(.82,.86,.82)});
       y-=25;
     });
+
     drawText(page,"Notes",40,y-3,10,true);
     const notes = $("notes").value || "";
     const chunks = notes.match(/.{1,85}(\s|$)/g) || [""];
     chunks.slice(0,4).forEach((line,i)=>drawText(page,line.trim(),40,y-20-(i*13),8.5,false));
 
-    drawText(page,"Required Attachments Included",40,105,11,true);
-    drawText(page,"✓ DG manometer photo of duct leakage test results",55,88,9,false);
-    drawText(page,"✓ Duct leakage test results app file",55,73,9,false);
-    drawText(page,"✓ Construction plans",55,58,9,false);
-
-    await addImagePage(pdfDoc,$("dgPhoto").files[0],"DG Manometer Photo of Duct Leakage Test Results");
-
-    const appFile = $("appResult").files[0];
-    if(appFile.type === "application/pdf") await appendPdf(pdfDoc, appFile);
-    else await addImagePage(pdfDoc,appFile,"Duct Leakage Test Results App File");
-
-    await appendPdf(pdfDoc,$("plans").files[0]);
+    drawText(page,"Supporting Files Selected Separately",40,105,11,true);
+    drawText(page,$("dgPhoto").files[0] ? "✓ DG manometer photo selected" : "○ DG manometer photo not selected",55,88,9,false);
+    drawText(page,$("appResult").files[0] ? "✓ Test results app export selected" : "○ Test results app export not selected",55,73,9,false);
+    drawText(page,"Supporting files are not merged into this PDF.",55,55,8.5,false);
 
     const bytes = await pdfDoc.save();
     const blob = new Blob([bytes],{type:"application/pdf"});
     const a = document.createElement("a");
     const safeAddress = ($("address").value || "Duct_Leakage_Report").replace(/[^a-z0-9]+/gi,"_");
-    a.href = URL.createObjectURL(blob);
+    const objectUrl = URL.createObjectURL(blob);
+    a.href = objectUrl;
     a.download = `Mean_Green_${safeAddress}.pdf`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
-    $("message").textContent = "Combined PDF report generated successfully.";
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    $("message").textContent = "Report PDF generated successfully. Email it with the DG photo and test results export as separate attachments.";
   }catch(err){
     console.error(err);
-    $("message").textContent = "Could not generate the PDF. Confirm that the DG manometer photo and test results export are valid image/PDF files.";
+    $("message").textContent = "Could not generate the report PDF. Refresh the page and try again.";
   }
 }
 
@@ -487,15 +481,3 @@ updateChecklist();
 </script>
 </body>
 </html>
-
-<style>
-/* Simplified two-attachment layout */
-.upload-grid, .attachments-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-}
-@media (max-width: 720px) {
-  .upload-grid, .attachments-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-</style>

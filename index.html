@@ -16,8 +16,6 @@
     *{box-sizing:border-box}
     body{
       margin:0;
-      padding-top:env(safe-area-inset-top);
-      padding-bottom:env(safe-area-inset-bottom);
       font-family:Arial,Helvetica,sans-serif;
       background:#eef2ee;
       color:var(--text);
@@ -158,14 +156,6 @@
       .header h1{font-size:23px}
     }
   </style>
-
-  <meta name="theme-color" content="#1f6b3a" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="Mean Green DLT" />
-  <link rel="manifest" href="manifest.webmanifest" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-
 </head>
 <body>
 <div class="wrap">
@@ -266,12 +256,11 @@
         <label>Construction Plans <span class="required">*</span></label>
         <input id="plans" type="file" accept=".pdf" />
         <small>PDF plans will be appended behind the report.</small>
-        <div id="plansStatus" class="status">No file selected.</div>
       </div>
     </div>
 
     <div class="notice">
-      The final PDF order is: Report → DG Manometer Photo → Test Results App Export → Construction Plans.
+      The final PDF order is: Report → DG Manometer Photo → Test Results App Export.
     </div>
   </section>
 
@@ -305,7 +294,7 @@ function updateChecklist(){
     ["Project information complete", $("builder").value && $("address").value && $("cfa").value && $("testDate").value],
     ["DG manometer photo attached", $("dgPhoto").files.length > 0],
     ["Test results app export attached", $("appResult").files.length > 0],
-    ["Construction plans attached", $("plans").files.length > 0]
+    ["", $("plans").files.length > 0]
   ];
   $("checklist").innerHTML = items.map(([name,ok]) =>
     `<div class="${ok ? 'check-ok' : 'check-missing'}">${ok ? '✓' : '✗'} ${name}</div>`
@@ -325,7 +314,6 @@ $("appResult").addEventListener("change", e => {
   updateChecklist();
 });
 $("plans").addEventListener("change", e => {
-  $("plansStatus").textContent = e.target.files[0] ? e.target.files[0].name : "No file selected.";
   updateChecklist();
 });
 $("cfa").addEventListener("input", calculate);
@@ -357,7 +345,6 @@ function clearForm(){
   ["dgPhoto","appResult","plans"].forEach(id => $(id).value = "");
   $("dgPreview").style.display = "none";
   $("appStatus").textContent = "No file selected.";
-  $("plansStatus").textContent = "No file selected.";
   $("normalized").value = "";
   $("message").textContent = "Form cleared.";
   updateChecklist();
@@ -490,7 +477,7 @@ async function generate(){
     $("message").textContent = "Combined PDF report generated successfully.";
   }catch(err){
     console.error(err);
-    $("message").textContent = "Could not generate the PDF. Confirm that the test export and plans are valid PDF/image files.";
+    $("message").textContent = "Could not generate the PDF. Confirm that the DG manometer photo and test results export are valid image/PDF files.";
   }
 }
 
@@ -498,14 +485,17 @@ $("generateBtn").onclick = generate;
 calculate();
 updateChecklist();
 </script>
-
-<script>
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./service-worker.js").catch(() => {});
-  });
-}
-</script>
-
 </body>
 </html>
+
+<style>
+/* Simplified two-attachment layout */
+.upload-grid, .attachments-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+@media (max-width: 720px) {
+  .upload-grid, .attachments-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+</style>

@@ -1,4 +1,4 @@
-const CACHE_NAME = "mean-green-dlt-v6-reliable-buttons";
+const CACHE_NAME = "mean-green-dlt-v7-time-saver";
 
 self.addEventListener("install", event => {
   self.skipWaiting();

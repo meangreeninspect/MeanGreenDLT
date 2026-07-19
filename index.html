@@ -250,6 +250,7 @@
 
   <section class="card">
     <h2>Project Information</h2>
+<div class="notice">Builder and community names entered here will be remembered on this iPad for future reports.</div>
     <div class="grid">
       <div><label>Builder</label><input id="builder" /></div>
       <div><label>Property Address</label><input id="address" /></div>
@@ -335,6 +336,7 @@
   </section>
 </div>
 
+
 <script>
 (function () {
   "use strict";
@@ -354,12 +356,36 @@
     if (message) message.textContent = text;
   }
 
+  function safeName(value) {
+    return String(value || "")
+      .trim()
+      .replace(/[^a-z0-9]+/gi, "_")
+      .replace(/^_+|_+$/g, "");
+  }
+
+  function formatDateForFile(value) {
+    if (!value) return new Date().toISOString().slice(0,10);
+    return value;
+  }
+
+  function updateReportTitle() {
+    const builder = safeName(byId("builder").value);
+    const address = safeName(byId("address").value);
+    const date = formatDateForFile(byId("testDate").value);
+    const parts = ["Mean_Green"];
+    if (builder) parts.push(builder);
+    if (address) parts.push(address);
+    parts.push("Duct_Leakage_Report", date);
+    document.title = parts.join("_");
+  }
+
   function calculate() {
     const cfa = parseFloat(byId("cfa").value);
     const cfm = parseFloat(byId("cfm25").value);
     byId("normalized").value =
       cfa > 0 && cfm >= 0 ? ((cfm / cfa) * 100).toFixed(2) : "";
     updateChecklist();
+    updateReportTitle();
   }
 
   function updateChecklist() {
@@ -380,6 +406,44 @@
     }).join("");
   }
 
+  function readSavedList(key) {
+    try {
+      return JSON.parse(localStorage.getItem(key) || "[]");
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveSuggestion(key, value) {
+    const clean = String(value || "").trim();
+    if (!clean) return;
+    const items = readSavedList(key);
+    const filtered = items.filter(function (item) {
+      return item.toLowerCase() !== clean.toLowerCase();
+    });
+    filtered.unshift(clean);
+    localStorage.setItem(key, JSON.stringify(filtered.slice(0, 25)));
+  }
+
+  function renderSuggestions() {
+    const builders = readSavedList("meanGreenBuilders");
+    const communities = readSavedList("meanGreenCommunities");
+
+    byId("builderSuggestions").innerHTML = builders.map(function (name) {
+      return '<option value="' + name.replace(/"/g, "&quot;") + '"></option>';
+    }).join("");
+
+    byId("communitySuggestions").innerHTML = communities.map(function (name) {
+      return '<option value="' + name.replace(/"/g, "&quot;") + '"></option>';
+    }).join("");
+  }
+
+  function rememberProjectNames() {
+    saveSuggestion("meanGreenBuilders", byId("builder").value);
+    saveSuggestion("meanGreenCommunities", byId("subdivision").value);
+    renderSuggestions();
+  }
+
   function saveDraft() {
     try {
       const data = {};
@@ -387,6 +451,7 @@
         data[id] = byId(id).value;
       });
       localStorage.setItem("meanGreenDuctLeakageDraft", JSON.stringify(data));
+      rememberProjectNames();
       setMessage("Draft saved on this iPad. Photos and files must be selected again later.");
     } catch (error) {
       setMessage("The draft could not be saved on this device.");
@@ -412,13 +477,15 @@
   }
 
   function clearForm() {
-    if (!window.confirm("Clear all form fields?")) return;
+    if (!window.confirm("Clear all project and test fields? Your saved builder and community suggestions will remain.")) return;
 
     fieldIds.forEach(function (id) {
       const field = byId(id);
       if (id === "program") field.value = "City Code / IECC";
       else if (id === "inspectionType") field.value = "Rough";
       else if (id === "result") field.value = "Pass";
+      else if (id === "raterName") field.value = "James Adams";
+      else if (id === "raterId") field.value = "4080169";
       else if (id === "rtin") field.value = "1086665";
       else if (id === "provider") field.value = "BPS (Building Performance Solutions)";
       else if (id === "company") field.value = "Mean Green Inspections, LLC";
@@ -434,6 +501,7 @@
     byId("appStatus").textContent = "No file selected.";
     byId("normalized").value = "";
     updateChecklist();
+    updateReportTitle();
     setMessage("Form cleared.");
   }
 
@@ -454,11 +522,15 @@
       return;
     }
 
-    setMessage("Print screen opened. Choose Share or Save as PDF.");
+    rememberProjectNames();
+    updateReportTitle();
+    setMessage("Print screen opened. Choose Share, then Save to Files or Mail.");
     window.print();
   }
 
   function initialize() {
+    renderSuggestions();
+
     byId("generateBtn").addEventListener("click", generateReport);
     byId("saveBtn").addEventListener("click", saveDraft);
     byId("loadBtn").addEventListener("click", loadDraft);
@@ -468,9 +540,18 @@
     byId("cfm25").addEventListener("input", calculate);
 
     fieldIds.forEach(function (id) {
-      byId(id).addEventListener("input", updateChecklist);
-      byId(id).addEventListener("change", updateChecklist);
+      byId(id).addEventListener("input", function () {
+        updateChecklist();
+        updateReportTitle();
+      });
+      byId(id).addEventListener("change", function () {
+        updateChecklist();
+        updateReportTitle();
+      });
     });
+
+    byId("builder").addEventListener("change", rememberProjectNames);
+    byId("subdivision").addEventListener("change", rememberProjectNames);
 
     byId("dgPhoto").addEventListener("change", function (event) {
       const file = event.target.files[0];
@@ -491,6 +572,7 @@
 
     calculate();
     updateChecklist();
+    updateReportTitle();
     setMessage("Ready.");
   }
 
@@ -501,6 +583,7 @@
   }
 })();
 </script>
+
 
 </body>
 </html>

@@ -1,18 +1,14 @@
 UPLOAD ONLY:
-1. index.html
-2. service-worker.js
+- index.html
+- service-worker.js
 
 Commit message:
-Use reliable iPad buttons and print PDF
+Add saved builders communities and report naming
 
-AFTER DEPLOYMENT
-1. Close every Safari tab and Home Screen copy of the app.
-2. Open Safari.
-3. Go to:
-   https://meangreeninspect.github.io/MeanGreenDLT/?v=6
-4. Test Clear Form first.
-5. Test Save Draft and Load Draft.
-6. Tap Create / Share PDF.
-7. The iPad print screen opens.
-8. On the print preview, tap Share.
-9. Choose Save to Files or Mail.
+After GitHub redeploys:
+1. Open https://meangreeninspect.github.io/MeanGreenDLT/?v=7
+2. Enter a builder and community.
+3. Tap Save Draft or Create / Share PDF.
+4. On the next report, those names will appear as suggestions.
+5. The report title used by the print/share screen will include:
+   Mean Green + Builder + Address + Duct Leakage Report + Date.

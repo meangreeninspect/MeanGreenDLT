@@ -161,6 +161,64 @@
 .upload-grid, .attachments-grid { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
 @media(max-width:720px){.upload-grid,.attachments-grid{grid-template-columns:1fr!important;}}
 </style>
+
+<style>
+@media print {
+  @page { size: letter; margin: 0.35in; }
+
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .container {
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .actions,
+  #message,
+  input[type="file"],
+  .upload small,
+  .upload .status,
+  .checklist {
+    display: none !important;
+  }
+
+  .card {
+    box-shadow: none !important;
+    break-inside: avoid;
+    margin: 0 0 10px !important;
+    padding: 12px !important;
+  }
+
+  input, select, textarea {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 2px 0 !important;
+    color: black !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+  }
+
+  textarea {
+    min-height: 45px !important;
+  }
+
+  .preview {
+    max-height: 430px !important;
+    object-fit: contain !important;
+  }
+
+  .notice {
+    font-size: 10px !important;
+  }
+}
+</style>
+
 </head>
 <body>
 <div class="wrap">
@@ -268,7 +326,7 @@
     <h2>Completion Checklist</h2>
     <div id="checklist" class="checklist"></div>
     <div class="actions">
-      <button class="primary" id="generateBtn">Generate Report PDF</button>
+      <button class="primary" id="generateBtn">Create / Share PDF</button>
       <button class="secondary" id="saveBtn">Save Draft to This Device</button>
       <button class="secondary" id="loadBtn">Load Saved Draft</button>
       <button class="danger" id="clearBtn">Clear Form</button>
@@ -277,221 +335,172 @@
   </section>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
-const ids = ["program","code","builder","address","subdivision","lot","permit","cfa","testDate","inspectionType","cfm25","result","notes","raterName","raterId","rtin","provider","company","phone","email"];
-const $ = id => document.getElementById(id);
+(function () {
+  "use strict";
 
-function calculate(){
-  const cfa = parseFloat($("cfa").value);
-  const cfm = parseFloat($("cfm25").value);
-  $("normalized").value = (cfa > 0 && cfm >= 0) ? ((cfm / cfa) * 100).toFixed(2) : "";
-  updateChecklist();
-}
-
-function updateChecklist(){
-  const items = [
-    ["Project information complete", $("builder").value && $("address").value && $("cfa").value && $("testDate").value],
-    ["DG manometer photo selected", $("dgPhoto").files.length > 0],
-    ["Test results app export selected", $("appResult").files.length > 0]
+  const fieldIds = [
+    "program","code","builder","address","subdivision","lot","permit","cfa",
+    "testDate","inspectionType","cfm25","result","notes","raterName","raterId",
+    "rtin","provider","company","phone","email"
   ];
-  $("checklist").innerHTML = items.map(([name,ok]) =>
-    `<div class="${ok ? 'check-ok' : 'check-missing'}">${ok ? '✓' : '✗'} ${name}</div>`
-  ).join("");
-}
 
-$("dgPhoto").addEventListener("change", e => {
-  const f = e.target.files[0];
-  if(f){
-    $("dgPreview").src = URL.createObjectURL(f);
-    $("dgPreview").style.display = "block";
-  }
-  updateChecklist();
-});
-$("appResult").addEventListener("change", e => {
-  $("appStatus").textContent = e.target.files[0] ? e.target.files[0].name : "No file selected.";
-  updateChecklist();
-});
-$("plans").addEventListener("change", e => {
-  $("plansStatus").textContent = e.target.files[0] ? e.target.files[0].name : "No file selected.";
-  updateChecklist();
-});
-$("cfa").addEventListener("input", calculate);
-$("cfm25").addEventListener("input", calculate);
-ids.forEach(id => $(id).addEventListener("input", updateChecklist));
-
-function saveDraft(){
-  const data = {};
-  ids.forEach(id => data[id] = $(id).value);
-  localStorage.setItem("meanGreenDuctLeakageDraft", JSON.stringify(data));
-  $("message").textContent = "Draft fields saved on this device. Attachments must be reselected when reopened.";
-}
-function loadDraft(){
-  const raw = localStorage.getItem("meanGreenDuctLeakageDraft");
-  if(!raw){ $("message").textContent = "No saved draft found."; return; }
-  const data = JSON.parse(raw);
-  ids.forEach(id => { if(data[id] !== undefined) $(id).value = data[id]; });
-  calculate();
-  $("message").textContent = "Saved draft loaded. Please reattach required files.";
-}
-function clearForm(){
-  if(!confirm("Clear all form fields?")) return;
-  ids.forEach(id => {
-    if(id === "program") $(id).value = "City Code / IECC";
-    else if(id === "inspectionType") $(id).value = "Rough";
-    else if(id === "result") $(id).value = "Pass";
-    else $(id).value = "";
-  });
-  ["dgPhoto","appResult"].forEach(id => $(id).value = "");
-  $("dgPreview").style.display = "none";
-  $("appStatus").textContent = "No file selected.";
-  $("plansStatus").textContent = "No file selected.";
-  $("normalized").value = "";
-  $("message").textContent = "Form cleared.";
-  updateChecklist();
-}
-
-$("saveBtn").onclick = saveDraft;
-$("loadBtn").onclick = loadDraft;
-$("clearBtn").onclick = clearForm;
-
-async function readAsArrayBuffer(file){
-  return await file.arrayBuffer();
-}
-
-function drawText(page, text, x, y, size=10, bold=false){
-  const font = bold ? window._pdfFonts.bold : window._pdfFonts.regular;
-  page.drawText(String(text || ""), {x,y,size,font,color:PDFLib.rgb(0.12,0.16,0.13)});
-}
-
-async function addImagePage(pdfDoc, file, title){
-  const page = pdfDoc.addPage([612,792]);
-  drawText(page,title,40,752,16,true);
-  const bytes = await readAsArrayBuffer(file);
-  let img;
-  if(file.type.includes("png")) img = await pdfDoc.embedPng(bytes);
-  else img = await pdfDoc.embedJpg(bytes);
-  const dims = img.scale(1);
-  const maxW = 532, maxH = 680;
-  const scale = Math.min(maxW/dims.width, maxH/dims.height);
-  const w = dims.width*scale, h=dims.height*scale;
-  page.drawImage(img,{x:(612-w)/2,y:(720-h)/2,width:w,height:h});
-}
-
-async function appendPdf(pdfDoc, file){
-  const srcBytes = await readAsArrayBuffer(file);
-  const src = await PDFLib.PDFDocument.load(srcBytes);
-  const pages = await pdfDoc.copyPages(src, src.getPageIndices());
-  pages.forEach(p => pdfDoc.addPage(p));
-}
-
-async function generate(){
-  const required = [
-    ["Builder", $("builder").value],
-    ["Property Address", $("address").value],
-    ["Conditioned Floor Area", $("cfa").value],
-    ["Test Date", $("testDate").value]
-  ];
-  const missing = required.filter(x => !x[1]).map(x => x[0]);
-  if(missing.length){
-    $("message").textContent = "Missing required items: " + missing.join(", ");
-    return;
+  function byId(id) {
+    return document.getElementById(id);
   }
 
-  if(!window.PDFLib){
-    $("message").textContent = "PDF library did not load. Check your internet connection and reopen the form.";
-    return;
+  function setMessage(text) {
+    const message = byId("message");
+    if (message) message.textContent = text;
   }
 
-  $("message").textContent = "Generating report PDF...";
-  try{
-    const pdfDoc = await PDFLib.PDFDocument.create();
-    window._pdfFonts = {
-      regular: await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica),
-      bold: await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold)
-    };
+  function calculate() {
+    const cfa = parseFloat(byId("cfa").value);
+    const cfm = parseFloat(byId("cfm25").value);
+    byId("normalized").value =
+      cfa > 0 && cfm >= 0 ? ((cfm / cfa) * 100).toFixed(2) : "";
+    updateChecklist();
+  }
 
-    const page = pdfDoc.addPage([612,792]);
-    page.drawRectangle({x:0,y:716,width:612,height:76,color:PDFLib.rgb(0.12,0.42,0.23)});
-    page.drawText("MEAN GREEN INSPECTIONS, LLC",{x:36,y:758,size:20,font:window._pdfFonts.bold,color:PDFLib.rgb(1,1,1)});
-    page.drawText("Universal Duct Leakage Test Report",{x:36,y:735,size:13,font:window._pdfFonts.regular,color:PDFLib.rgb(1,1,1)});
-    page.drawText("Provider: BPS",{x:470,y:735,size:10,font:window._pdfFonts.bold,color:PDFLib.rgb(1,1,1)});
-
-    let y=690;
-    const rows = [
-      ["Compliance Program", $("program").value],
-      ["Code / Program Version", $("code").value],
-      ["Builder", $("builder").value],
-      ["Property Address", $("address").value],
-      ["Subdivision / Lot", `${$("subdivision").value} / ${$("lot").value}`],
-      ["Permit Number", $("permit").value],
-      ["Conditioned Floor Area", `${$("cfa").value} sq ft`],
-      ["Test Date", $("testDate").value],
-      ["Inspection Type", $("inspectionType").value],
-      ["Test Pressure", "25 Pa"],
-      ["Measured CFM25", $("cfm25").value],
-      ["CFM25 per 100 ft²", $("normalized").value],
-      ["Result", $("result").value],
-      ["Rater Name", $("raterName").value],
-      ["RESNET Rater ID", $("raterId").value],
-      ["RTIN Number", $("rtin").value],
-      ["Provider", $("provider").value],
-      ["Company", $("company").value],
-      ["Phone", $("phone").value],
-      ["Email", $("email").value]
+  function updateChecklist() {
+    const items = [
+      ["Project information complete",
+        byId("builder").value &&
+        byId("address").value &&
+        byId("cfa").value &&
+        byId("testDate").value],
+      ["DG manometer photo selected", byId("dgPhoto").files.length > 0],
+      ["Test results app export selected", byId("appResult").files.length > 0]
     ];
-    rows.forEach(([label,value])=>{
-      drawText(page,label,40,y,10,true);
-      drawText(page,value,210,y,10,false);
-      page.drawLine({start:{x:40,y:y-5},end:{x:572,y:y-5},thickness:.5,color:PDFLib.rgb(.82,.86,.82)});
-      y-=25;
+
+    byId("checklist").innerHTML = items.map(function (item) {
+      const ok = Boolean(item[1]);
+      return '<div class="' + (ok ? "check-ok" : "check-missing") + '">' +
+        (ok ? "YES - " : "NO - ") + item[0] + "</div>";
+    }).join("");
+  }
+
+  function saveDraft() {
+    try {
+      const data = {};
+      fieldIds.forEach(function (id) {
+        data[id] = byId(id).value;
+      });
+      localStorage.setItem("meanGreenDuctLeakageDraft", JSON.stringify(data));
+      setMessage("Draft saved on this iPad. Photos and files must be selected again later.");
+    } catch (error) {
+      setMessage("The draft could not be saved on this device.");
+    }
+  }
+
+  function loadDraft() {
+    try {
+      const raw = localStorage.getItem("meanGreenDuctLeakageDraft");
+      if (!raw) {
+        setMessage("No saved draft was found.");
+        return;
+      }
+      const data = JSON.parse(raw);
+      fieldIds.forEach(function (id) {
+        if (data[id] !== undefined) byId(id).value = data[id];
+      });
+      calculate();
+      setMessage("Draft loaded. Please select the photo and test-results file again.");
+    } catch (error) {
+      setMessage("The saved draft could not be loaded.");
+    }
+  }
+
+  function clearForm() {
+    if (!window.confirm("Clear all form fields?")) return;
+
+    fieldIds.forEach(function (id) {
+      const field = byId(id);
+      if (id === "program") field.value = "City Code / IECC";
+      else if (id === "inspectionType") field.value = "Rough";
+      else if (id === "result") field.value = "Pass";
+      else if (id === "rtin") field.value = "1086665";
+      else if (id === "provider") field.value = "BPS (Building Performance Solutions)";
+      else if (id === "company") field.value = "Mean Green Inspections, LLC";
+      else if (id === "phone") field.value = "210-425-5263";
+      else if (id === "email") field.value = "meangreeninspect@gmail.com";
+      else field.value = "";
     });
 
-    drawText(page,"Notes",40,y-3,10,true);
-    const notes = $("notes").value || "";
-    const chunks = notes.match(/.{1,85}(\s|$)/g) || [""];
-    chunks.slice(0,4).forEach((line,i)=>drawText(page,line.trim(),40,y-20-(i*13),8.5,false));
+    byId("dgPhoto").value = "";
+    byId("appResult").value = "";
+    byId("dgPreview").removeAttribute("src");
+    byId("dgPreview").style.display = "none";
+    byId("appStatus").textContent = "No file selected.";
+    byId("normalized").value = "";
+    updateChecklist();
+    setMessage("Form cleared.");
+  }
 
-    drawText(page,"Supporting Files Selected Separately",40,105,11,true);
-    drawText(page,$("dgPhoto").files[0] ? "YES - DG manometer photo selected" : "NO - DG manometer photo not selected",55,88,9,false);
-    drawText(page,$("appResult").files[0] ? "YES - Test results app export selected" : "NO - Test results app export not selected",55,73,9,false);
-    drawText(page,"Supporting files are not merged into this PDF.",55,55,8.5,false);
+  function generateReport() {
+    const required = [
+      ["Builder", byId("builder").value],
+      ["Property Address", byId("address").value],
+      ["Conditioned Floor Area", byId("cfa").value],
+      ["Test Date", byId("testDate").value]
+    ];
 
-    const bytes = await pdfDoc.save();
-    const blob = new Blob([bytes],{type:"application/pdf"});
-    const safeAddress = ($("address").value || "Duct_Leakage_Report").replace(/[^a-z0-9]+/gi,"_");
-    const fileName = `Mean_Green_${safeAddress}.pdf`;
-    const objectUrl = URL.createObjectURL(blob);
+    const missing = required
+      .filter(function (item) { return !item[1]; })
+      .map(function (item) { return item[0]; });
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-    if(isIOS){
-      const preview = window.open(objectUrl, "_blank");
-      if(!preview){
-        window.location.href = objectUrl;
-      }
-      $("message").textContent = "PDF opened. Tap Share, then Save to Files or Mail.";
-    }else{
-      const a = document.createElement("a");
-      a.href = objectUrl;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      $("message").textContent = "Report PDF downloaded successfully.";
+    if (missing.length) {
+      setMessage("Missing required items: " + missing.join(", "));
+      return;
     }
 
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-  }catch(err){
-    console.error(err);
-    $("message").textContent = "Could not generate the report PDF. Refresh the page and try again.";
+    setMessage("Print screen opened. Choose Share or Save as PDF.");
+    window.print();
   }
-}
 
-$("generateBtn").onclick = generate;
-calculate();
-updateChecklist();
+  function initialize() {
+    byId("generateBtn").addEventListener("click", generateReport);
+    byId("saveBtn").addEventListener("click", saveDraft);
+    byId("loadBtn").addEventListener("click", loadDraft);
+    byId("clearBtn").addEventListener("click", clearForm);
+
+    byId("cfa").addEventListener("input", calculate);
+    byId("cfm25").addEventListener("input", calculate);
+
+    fieldIds.forEach(function (id) {
+      byId(id).addEventListener("input", updateChecklist);
+      byId(id).addEventListener("change", updateChecklist);
+    });
+
+    byId("dgPhoto").addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      if (file) {
+        byId("dgPreview").src = URL.createObjectURL(file);
+        byId("dgPreview").style.display = "block";
+      } else {
+        byId("dgPreview").style.display = "none";
+      }
+      updateChecklist();
+    });
+
+    byId("appResult").addEventListener("change", function (event) {
+      const file = event.target.files[0];
+      byId("appStatus").textContent = file ? file.name : "No file selected.";
+      updateChecklist();
+    });
+
+    calculate();
+    updateChecklist();
+    setMessage("Ready.");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialize);
+  } else {
+    initialize();
+  }
+})();
 </script>
+
 </body>
 </html>

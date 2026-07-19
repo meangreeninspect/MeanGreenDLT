@@ -403,7 +403,7 @@ async function generate(){
     return;
   }
 
-  $("message").textContent = "Building report PDF...";
+  $("message").textContent = "Generating report PDF...";
   try{
     const pdfDoc = await PDFLib.PDFDocument.create();
     window._pdfFonts = {
@@ -425,7 +425,7 @@ async function generate(){
       ["Property Address", $("address").value],
       ["Subdivision / Lot", `${$("subdivision").value} / ${$("lot").value}`],
       ["Permit Number", $("permit").value],
-      ["Conditioned Floor Area", `${$("cfa").value} ft²`],
+      ["Conditioned Floor Area", `${$("cfa").value} sq ft`],
       ["Test Date", $("testDate").value],
       ["Inspection Type", $("inspectionType").value],
       ["Test Pressure", "25 Pa"],
@@ -453,22 +453,36 @@ async function generate(){
     chunks.slice(0,4).forEach((line,i)=>drawText(page,line.trim(),40,y-20-(i*13),8.5,false));
 
     drawText(page,"Supporting Files Selected Separately",40,105,11,true);
-    drawText(page,$("dgPhoto").files[0] ? "✓ DG manometer photo selected" : "○ DG manometer photo not selected",55,88,9,false);
-    drawText(page,$("appResult").files[0] ? "✓ Test results app export selected" : "○ Test results app export not selected",55,73,9,false);
+    drawText(page,$("dgPhoto").files[0] ? "YES - DG manometer photo selected" : "NO - DG manometer photo not selected",55,88,9,false);
+    drawText(page,$("appResult").files[0] ? "YES - Test results app export selected" : "NO - Test results app export not selected",55,73,9,false);
     drawText(page,"Supporting files are not merged into this PDF.",55,55,8.5,false);
 
     const bytes = await pdfDoc.save();
     const blob = new Blob([bytes],{type:"application/pdf"});
-    const a = document.createElement("a");
     const safeAddress = ($("address").value || "Duct_Leakage_Report").replace(/[^a-z0-9]+/gi,"_");
+    const fileName = `Mean_Green_${safeAddress}.pdf`;
     const objectUrl = URL.createObjectURL(blob);
-    a.href = objectUrl;
-    a.download = `Mean_Green_${safeAddress}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
-    $("message").textContent = "Report PDF generated successfully. Email it with the DG photo and test results export as separate attachments.";
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    if(isIOS){
+      const preview = window.open(objectUrl, "_blank");
+      if(!preview){
+        window.location.href = objectUrl;
+      }
+      $("message").textContent = "PDF opened. Tap Share, then Save to Files or Mail.";
+    }else{
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      $("message").textContent = "Report PDF downloaded successfully.";
+    }
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
   }catch(err){
     console.error(err);
     $("message").textContent = "Could not generate the report PDF. Refresh the page and try again.";

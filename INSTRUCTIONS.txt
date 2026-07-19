@@ -1,14 +1,19 @@
-UPLOAD ONLY:
+ROLL BACK TO THE LAST STABLE VERSION
+
+Upload ONLY:
 - index.html
 - service-worker.js
 
-Commit message:
-Add saved builders communities and report naming
+GitHub commit message:
+Rollback to stable working version
 
-After GitHub redeploys:
-1. Open https://meangreeninspect.github.io/MeanGreenDLT/?v=7
-2. Enter a builder and community.
-3. Tap Save Draft or Create / Share PDF.
-4. On the next report, those names will appear as suggestions.
-5. The report title used by the print/share screen will include:
-   Mean Green + Builder + Address + Duct Leakage Report + Date.
+After GitHub deploys:
+1. Close every open copy of the app.
+2. Open Safari.
+3. Go to:
+   https://meangreeninspect.github.io/MeanGreenDLT/?rollback=7
+4. Refresh once.
+5. The four buttons should work again.
+6. Create / Share PDF will use the working print/share flow.
+
+Do not upload INSTRUCTIONS.txt or the ZIP itself.
